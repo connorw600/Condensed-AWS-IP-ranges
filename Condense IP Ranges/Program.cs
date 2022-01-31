@@ -14,6 +14,13 @@ namespace Condense_IP_Ranges
     {
         static void Main(string[] args)
         {
+            if (args.Length == 0)
+            {
+                Console.WriteLine("Please add Amazon Regions as comma seperated params \"./Condense IP Ranges.exe 'eu-west-1,eu-west-2,eu-west-3'\"");
+            }
+
+            var regionIds = args[0].Split(',');
+
             var httpClient = new HttpClient();
             var jsonIpRanges = httpClient
                 .GetStringAsync(new Uri("https://ip-ranges.amazonaws.com/ip-ranges.json"))
@@ -26,14 +33,14 @@ namespace Condense_IP_Ranges
                 return;
             }
 
-            var euWestRanges = awsIpPrefixes
-                .FindAll(x => x.Region == "eu-west-1" || x.Region == "eu-west-2")
+            var awsIpv4Ranges = awsIpPrefixes
+                .FindAll(x => regionIds.Contains(x.Region))
                 .Select(x => x.GetIpAddressRange())
                 .OrderBy(y => y.GetPrefixLength())
                 .ToArray();
             var newIpRanges = new List<IPAddressRange>();
 
-            foreach (var euWestRange in euWestRanges)
+            foreach (var euWestRange in awsIpv4Ranges)
             {
                 if (newIpRanges.Any(x => x.Contains(euWestRange))) continue;
 
@@ -53,18 +60,20 @@ namespace Condense_IP_Ranges
                 }
             }
 
-            Console.WriteLine($"Started with {euWestRanges.Count()} now we have {newIpRanges.Count()}");
+            Console.WriteLine($"Started with {awsIpv4Ranges.Count()} now we have {newIpRanges.Count()}");
             if (!Directory.Exists("output"))
             {
                 Directory.CreateDirectory("output");
             }
             
             var fileStream = File.Create("output/ip-ranges.txt");
-            newIpRanges.ForEach(x =>
-            {
-                var lineBytes = Encoding.ASCII.GetBytes(x.ToCidrString() + Environment.NewLine);
-                fileStream.Write(lineBytes);
-            });
+            newIpRanges.OrderBy(x => x.ToString())
+                .ToList()
+                .ForEach(x =>
+                {
+                    var lineBytes = Encoding.ASCII.GetBytes(x.ToCidrString() + Environment.NewLine);
+                    fileStream.Write(lineBytes);
+                });
             fileStream.Close();
         }
     }
