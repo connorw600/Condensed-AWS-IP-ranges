@@ -16,7 +16,8 @@ namespace Condense_IP_Ranges
         {
             if (args.Length == 0)
             {
-                Console.WriteLine("Please add Amazon Regions as comma seperated params \"./Condense IP Ranges.exe 'eu-west-1,eu-west-2,eu-west-3'\"");
+                Console.WriteLine(
+                    "Please add Amazon Regions as comma seperated params \"./Condense IP Ranges.exe 'eu-west-1,eu-west-2,eu-west-3'\"");
             }
 
             var regionIds = args[0].Split(',');
@@ -33,41 +34,54 @@ namespace Condense_IP_Ranges
                 return;
             }
 
-            var awsIpv4Ranges = awsIpPrefixes
+            var ipRange = awsIpPrefixes
                 .FindAll(x => regionIds.Contains(x.Region))
                 .Select(x => x.GetIpAddressRange())
                 .OrderBy(y => y.GetPrefixLength())
-                .ToArray();
-            var newIpRanges = new List<IPAddressRange>();
+                .ToList();
+            var originalIpCount = ipRange.Count;
 
-            foreach (var euWestRange in awsIpv4Ranges)
+            short maximumCidrSize = 16;
+            while (ipRange.Count() > 180)
             {
-                if (newIpRanges.Any(x => x.Contains(euWestRange))) continue;
-
-                if (euWestRange.GetPrefixLength() < 16)
+                var newIpRanges = new List<IPAddressRange>();
+                foreach (var currentRange in ipRange)
                 {
-                    newIpRanges.Add(euWestRange);
-                }
-                else
-                {
-                    var ipAddress = euWestRange.Begin.ToString().Split('.');
-                    var newAddress = IPAddressRange.Parse($"{ipAddress[0]}.{ipAddress[1]}.0.0/16");
-
-                    if (!newIpRanges.Any(x => x.Contains(newAddress)))
+                    var rangeToEvaluate = currentRange;
+                    if (currentRange.GetPrefixLength() > maximumCidrSize)
                     {
-                        newIpRanges.Add(newAddress);
+                        rangeToEvaluate = new IPAddressRange(currentRange.Begin, maximumCidrSize);
                     }
+                    
+                    Console.WriteLine($"Evaluating {rangeToEvaluate}");
+                    var rangeContainsCount = ipRange.Count(x => !x.Equals(currentRange) && rangeToEvaluate.Contains(x));
+                    if (rangeContainsCount <= 1)
+                    {
+                        if (!newIpRanges.Contains(currentRange))
+                        {
+                            newIpRanges.Add(currentRange);
+                        }
+
+                        continue;
+                    }
+
+                    Console.WriteLine($"Range contains {rangeContainsCount} other ranges");
+                    newIpRanges.RemoveAll(x => rangeToEvaluate.Contains(x));
+                    newIpRanges.Add(rangeToEvaluate);
                 }
+
+                ipRange = newIpRanges;
+                maximumCidrSize -= 1;
             }
 
-            Console.WriteLine($"Started with {awsIpv4Ranges.Count()} now we have {newIpRanges.Count()}");
+            Console.WriteLine($"Started with {originalIpCount} now we have {ipRange.Count()}");
             if (!Directory.Exists("output"))
             {
                 Directory.CreateDirectory("output");
             }
-            
+
             var fileStream = File.Create("output/ip-ranges.txt");
-            newIpRanges.OrderBy(x => x.ToString())
+            ipRange.OrderBy(x => x.ToString())
                 .ToList()
                 .ForEach(x =>
                 {

@@ -2,7 +2,7 @@
   "profiles": {
     "Condense IP Ranges": {
       "commandName": "Project",
-      "commandLineArgs": ""
+      "commandLineArgs": "eu-west-1,eu-west-2,eu-central-1,us-east-1,us-west-1,ca-central-1,ap-southeast-2"
     }
   }
 }
